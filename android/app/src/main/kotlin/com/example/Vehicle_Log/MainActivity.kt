@@ -1,4 +1,4 @@
-package com.james.Vehicle_Log
+package io.github.james_68620.Vehicle_Log
 
 import io.flutter.embedding.android.FlutterActivity
 

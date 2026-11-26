@@ -8,7 +8,7 @@
 PRODUCT_NAME = Vehicle_Log
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.james.VehicleLog
+PRODUCT_BUNDLE_IDENTIFIER = io.github.james_68620.VehicleLog
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.james. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 io.github.james_68620. All rights reserved.

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.james.Vehicle_Log"
+    namespace = "io.github.james_68620.Vehicle_Log"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ dependencies {
 }
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.james.Vehicle_Log"
+        applicationId = "io.github.james_68620.Vehicle_Log"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
