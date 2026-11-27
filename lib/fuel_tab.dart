@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
+import 'attachments.dart';
 import 'database.dart';
 import 'models.dart';
 import 'settings.dart';
@@ -159,11 +161,14 @@ class _FuelFormPageState extends State<FuelFormPage> {
   late final String _initialOdometer;
   late DateTime _date;
   late bool _fullTank;
+  late final String _entryId; // known before saving, so receipts can attach
+  bool _saved = false;
 
   @override
   void initState() {
     super.initState();
-    final e = widget.existing;
+        final e = widget.existing;
+    _entryId = e?.id ?? const Uuid().v4();
     _date = e?.date ?? DateTime.now();
     _fullTank = e?.fullTank ?? true;
     _initialOdometer =
@@ -177,7 +182,11 @@ class _FuelFormPageState extends State<FuelFormPage> {
   void dispose() {
     _odometerController.dispose();
     _litresController.dispose();
-    _costController.dispose();
+        _costController.dispose();
+    // Leaving a new entry unsaved: don't keep receipts for it.
+    if (widget.existing == null && !_saved) {
+      AttachmentStore.removeAllFor(_entryId);
+    }
     super.dispose();
   }
 
@@ -208,7 +217,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final entry = FuelEntry(
-      id: widget.existing?.id, // keep the same id when editing
+            id: _entryId, // the same id the receipts are attached to
       vehicleId: widget.vehicleId,
       date: _date,
       odometer: _odometerKm(),
@@ -216,6 +225,7 @@ class _FuelFormPageState extends State<FuelFormPage> {
       cost: double.parse(_costController.text),
       fullTank: _fullTank,
     );
+        _saved = true;
     Navigator.pop(context, entry); // send the entry back to the list page
   }
 
@@ -333,6 +343,9 @@ class _FuelFormPageState extends State<FuelFormPage> {
                 value: _fullTank,
                 onChanged: (value) => setState(() => _fullTank = value ?? true),
               ),
+              const SizedBox(height: 16),
+                            const SizedBox(height: 8),
+              AttachmentsSection(parentType: 'fuel', parentId: _entryId),
               const SizedBox(height: 16),
               FilledButton(onPressed: _save, child: const Text('Save')),
             ],

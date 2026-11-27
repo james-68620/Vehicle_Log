@@ -36,12 +36,17 @@ class AppSettings extends ChangeNotifier {
   bool _notifications = false;
   bool get notifications => _notifications;
 
+  // false: a receipt downloads when you open it. true: all download in sync.
+  bool _attachmentsFullSync = false;
+  bool get attachmentsFullSync => _attachmentsFullSync;
+
   // Reads the saved settings from disk (called once when the app starts).
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _imperial = prefs.getBool('imperial') ?? false;
     _currency = prefs.getString('currency') ?? '£';
     _notifications = prefs.getBool('notifications') ?? false;
+    _attachmentsFullSync = prefs.getBool('attachments_full_sync') ?? false;
     notifyListeners();
   }
 
@@ -64,6 +69,13 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('currency', symbol);
+  }
+
+  Future<void> setAttachmentsFullSync(bool value) async {
+    _attachmentsFullSync = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('attachments_full_sync', value);
   }
 
   // e.g. "£12.50", "kr 12.50" or "12.50" (letters get a space after them)

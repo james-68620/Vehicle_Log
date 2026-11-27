@@ -88,7 +88,7 @@ class CsvTools {
         lines.add(_line([
           vehicle.name,
           _formatDate(e.date),
-          '${e.odometer}',
+          e.odometer == null ? '' : '${e.odometer}',
           e.serviceType,
           e.cost.toStringAsFixed(2),
           e.notes,
@@ -260,7 +260,10 @@ class CsvTools {
 
       final name = _cell(row, cVehicle);
       final date = _parseDate(_cell(row, cDate));
-      final odometer = _parseNumber(_cell(row, cOdo))?.round();
+      final odoText = _cell(row, cOdo);
+      final noOdometer = odoText.isEmpty || odoText.toLowerCase() == 'null';
+      final int? odometer =
+          noOdometer ? null : _parseNumber(odoText)?.round();
       final type = _cell(row, cType);
       final cost = _parseNumber(_cell(row, cCost));
 
@@ -273,7 +276,7 @@ class CsvTools {
             '("${_cell(row, cDate)}"). Use 2025-03-14 or 14/03/2025.');
         continue;
       }
-      if (odometer == null || odometer < 0) {
+            if (!noOdometer && (odometer == null || odometer < 0)) {
         result.problems.add('$label: odometer is not a valid number.');
         continue;
       }

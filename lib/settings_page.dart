@@ -318,6 +318,33 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+    Widget _receiptsSection(BuildContext context) {
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Receipts and invoices',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Download all receipts to this device'),
+            subtitle: const Text(
+              'Off: a receipt is downloaded when you open it. On: every '
+              'photo (the smaller copy) and PDF is downloaded during sync, '
+              'which uses more storage and data. Full-size originals are '
+              'always fetched from the photo viewer.',
+            ),
+            value: settings.attachmentsFullSync,
+            onChanged: settings.setAttachmentsFullSync,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusText() {
     return ListenableBuilder(
       listenable: syncService,
@@ -459,6 +486,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 _currencySection(context),
                 const SizedBox(height: 24),
                 _dataSection(context),
+                const SizedBox(height: 24),
+                _receiptsSection(context),
                 if (Platform.isAndroid) ...[
                   const SizedBox(height: 24),
                   _notificationsSection(context),

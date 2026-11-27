@@ -53,13 +53,13 @@ ReminderInfo evaluateReminder(
 
   final parts = <String>[];
 
-  // Distance
+    // Distance (needs the last service to have a mileage)
   final intervalKm = reminder.intervalKm;
-  if (intervalKm != null) {
-    final nowKm = (currentKm != null && currentKm > last.odometer)
-        ? currentKm
-        : last.odometer;
-    final left = last.odometer + intervalKm - nowKm;
+  final lastKm = last.odometer;
+  if (intervalKm != null && lastKm != null) {
+    final nowKm =
+        (currentKm != null && currentKm > lastKm) ? currentKm : lastKm;
+    final left = lastKm + intervalKm - nowKm;
     if (left < 0) {
       parts.add('${settings.formatDistance(-left)} overdue');
       raise(ReminderStatus.overdue);
@@ -92,7 +92,12 @@ ReminderInfo evaluateReminder(
       if (days <= _soonDays) raise(ReminderStatus.soon);
     }
   }
-
+  if (parts.isEmpty) {
+    return const ReminderInfo(
+      ReminderStatus.unknown,
+      'Last service has no mileage recorded',
+    );
+  }
   final text = parts.join('  •  ');
   return ReminderInfo(status, text[0].toUpperCase() + text.substring(1));
 }

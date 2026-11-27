@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:smb_connect/smb_connect.dart';
 
+import 'attachment_sync.dart';
 import 'database.dart';
 import 'sync_config.dart';
 
@@ -146,6 +147,20 @@ class SyncService extends ChangeNotifier {
     await writer.close();
   }
 
+    // Used when you open a receipt that isn't on this device yet.
+  Future<SmbConnect> connectForReceipts() async {
+    final config = await SyncConfigStore.load();
+    if (!config.enabled || !config.isComplete) {
+      throw 'Sync is not set up, so this file cannot be fetched (see Settings)';
+    }
+    return _connect(config);
+  }
+
+  Future<String> receiptsFolderPath() async {
+    final config = await SyncConfigStore.load();
+    return '${_folderPath(config)}/attachments';
+  }
+
   // One full sync. Returns how many records were received from other devices.
   Future<int> _syncOnce(SyncConfig config) async {
     final deviceId = await SyncConfigStore.deviceId();
@@ -181,7 +196,16 @@ class SyncService extends ChangeNotifier {
         'saved_at': DateTime.now().toIso8601String(),
         ...export,
       });
-      await _writeText(connect, '$folderPath/$ownName', text);
+            await _writeText(connect, '$folderPath/$ownName', text);
+
+      // 3. Receipt files: upload new ones, remove deleted ones and, in full
+      // mode, download the ones this device is missing. A problem here must
+      // not make the data sync itself fail.
+      try {
+        await AttachmentSync.run(connect, '$folderPath/attachments');
+      } catch (e) {
+        debugPrint('Receipt sync problem: $e');
+      }
 
       return changed;
     } finally {

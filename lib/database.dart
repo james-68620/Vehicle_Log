@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'attachments.dart';
 import 'sync_on_change.dart';
 
 import 'package:path/path.dart' as p;
@@ -26,9 +27,10 @@ class AppDatabase {
 
     _db = await openDatabase(
       path,
-      version: 6,
+      version: 8,
       // Runs only when the database is first created.
-      onCreate: (db, version) async {
+            onCreate: (db, version) async {
+        await _createAttachmentTable(db);
         await db.execute('''
           CREATE TABLE vehicles (
             id TEXT PRIMARY KEY,
@@ -104,9 +106,28 @@ class AppDatabase {
           await db.execute('ALTER TABLE vehicles ADD COLUMN mileage INTEGER');
           await db.execute('ALTER TABLE vehicles ADD COLUMN mot_date TEXT');
         }
+                if (oldVersion < 7) {
+          await _createAttachmentTable(db);
+        }
         if (oldVersion < 6) {
           await _createReminderTable(db);
         }
+              if (oldVersion < 8) {
+        // Service mileage becomes optional: rebuild the table without NOT NULL.
+        await db.execute(
+          'ALTER TABLE service_entries RENAME TO service_entries_old',
+        );
+        await _createServiceTable(db);
+        await db.execute('''
+          INSERT INTO service_entries
+            (id, vehicle_id, date, odometer, service_type, cost, notes,
+             updated_at, deleted)
+          SELECT id, vehicle_id, date, odometer, service_type, cost, notes,
+             updated_at, deleted
+          FROM service_entries_old
+        ''');
+        await db.execute('DROP TABLE service_entries_old');
+      }
       },
     );
     return _db!;
@@ -118,10 +139,25 @@ class AppDatabase {
         id TEXT PRIMARY KEY,
         vehicle_id TEXT NOT NULL,
         date TEXT NOT NULL,
-        odometer INTEGER NOT NULL,
+        odometer INTEGER,
         service_type TEXT NOT NULL,
         cost REAL NOT NULL,
         notes TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL,
+        deleted INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+  }
+
+    static Future<void> _createAttachmentTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS attachments (
+        id TEXT PRIMARY KEY,
+        parent_type TEXT NOT NULL,
+        parent_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        original_size INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL,
         deleted INTEGER NOT NULL DEFAULT 0
       )
@@ -216,7 +252,8 @@ class AppDatabase {
         SyncOnChange.request();
   }
 
-  static Future<void> deleteEntry(String id) async {
+    static Future<void> deleteEntry(String id) async {
+    await AttachmentStore.removeAllFor(id); // deleting an entry removes its receipts
     final db = await get();
     await db.update(
       'fuel_entries',
@@ -251,7 +288,8 @@ class AppDatabase {
         SyncOnChange.request();
   }
 
-  static Future<void> deleteService(String id) async {
+    static Future<void> deleteService(String id) async {
+    await AttachmentStore.removeAllFor(id);
     final db = await get();
     await db.update(
       'service_entries',
@@ -296,9 +334,51 @@ class AppDatabase {
         SyncOnChange.request();
   }
 
+    // ---- Attachments (receipts and invoices) ----
+
+  static Future<List<Attachment>> loadAttachments(String parentId) async {
+    final db = await get();
+    final rows = await db.query(
+      'attachments',
+      where: 'deleted = 0 AND parent_id = ?',
+      whereArgs: [parentId],
+      orderBy: 'updated_at ASC',
+    );
+    return rows.map(Attachment.fromMap).toList();
+  }
+
+  static Future<void> saveAttachment(Attachment attachment) async {
+    final db = await get();
+    await db.insert(
+      'attachments',
+      attachment.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    SyncOnChange.request();
+  }
+
+  static Future<void> deleteAttachment(String id) async {
+    final db = await get();
+    await db.update(
+      'attachments',
+      {'deleted': 1, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    SyncOnChange.request();
+  }
+
+    // Every receipt record, including deleted ones, for tidying up on sync.
+  static Future<List<Attachment>> loadAllAttachments() async {
+    final db = await get();
+    final rows = await db.query('attachments');
+    return rows.map(Attachment.fromMap).toList();
+  }
+
   // ---- Sync ----
 
-  static const _syncTables = [
+    static const _syncTables = [
+    'attachments',
     'vehicles',
     'fuel_entries',
     'service_entries',

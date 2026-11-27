@@ -114,7 +114,7 @@ class ServiceEntry {
   final String id;
   final String vehicleId;
   final DateTime date;
-  final int odometer; // km
+  final int? odometer; // km, may be missing
   final String serviceType; // e.g. "Oil change"
   final double cost;
   final String notes;
@@ -125,7 +125,7 @@ class ServiceEntry {
     String? id,
     required this.vehicleId,
     required this.date,
-    required this.odometer,
+    this.odometer,
     required this.serviceType,
     required this.cost,
     this.notes = '',
@@ -150,7 +150,7 @@ class ServiceEntry {
         id: map['id'] as String,
         vehicleId: map['vehicle_id'] as String,
         date: DateTime.parse(map['date'] as String),
-        odometer: map['odometer'] as int,
+        odometer: map['odometer'] as int?,
         serviceType: map['service_type'] as String,
         cost: (map['cost'] as num).toDouble(),
         notes: map['notes'] as String,
@@ -196,6 +196,52 @@ class ServiceReminder {
         serviceType: map['service_type'] as String,
         intervalKm: map['interval_km'] as int?,
         intervalMonths: map['interval_months'] as int?,
+        updatedAt: DateTime.parse(map['updated_at'] as String),
+        deleted: (map['deleted'] as int) == 1,
+      );
+}
+
+// A receipt or invoice (a photo or PDF) attached to a fuel or service entry.
+class Attachment {
+  final String id;
+  final String parentType; // 'fuel' or 'service'
+  final String parentId; // id of the fuel or service entry
+  final String fileName; // the original file name
+  final String kind; // 'image' or 'pdf'
+  final int originalSize; // bytes of the original file
+  final DateTime updatedAt;
+  final bool deleted;
+
+  Attachment({
+    String? id,
+    required this.parentType,
+    required this.parentId,
+    required this.fileName,
+    required this.kind,
+    required this.originalSize,
+    DateTime? updatedAt,
+    this.deleted = false,
+  })  : id = id ?? const Uuid().v4(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'parent_type': parentType,
+        'parent_id': parentId,
+        'file_name': fileName,
+        'kind': kind,
+        'original_size': originalSize,
+        'updated_at': updatedAt.toIso8601String(),
+        'deleted': deleted ? 1 : 0,
+      };
+
+  factory Attachment.fromMap(Map<String, Object?> map) => Attachment(
+        id: map['id'] as String,
+        parentType: map['parent_type'] as String,
+        parentId: map['parent_id'] as String,
+        fileName: map['file_name'] as String,
+        kind: map['kind'] as String,
+        originalSize: (map['original_size'] as num).toInt(),
         updatedAt: DateTime.parse(map['updated_at'] as String),
         deleted: (map['deleted'] as int) == 1,
       );

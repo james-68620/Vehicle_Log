@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
+import 'attachments.dart';
 import 'database.dart';
 import 'models.dart';
 import 'settings.dart';
@@ -76,8 +78,9 @@ class _ServiceTabState extends State<ServiceTab> {
         final date = entry.date.toIso8601String().split('T').first;
         return ListTile(
           title: Text(entry.serviceType),
-          subtitle: Text(
-            '$date  •  ${settings.formatDistance(entry.odometer)}'
+           subtitle: Text(
+            '$date'
+            '${entry.odometer == null ? '' : '  •  ${settings.formatDistance(entry.odometer!)}'}'
             '${entry.notes.isEmpty ? '' : '\n${entry.notes}'}',
           ),
           isThreeLine: entry.notes.isNotEmpty,
@@ -123,7 +126,9 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
   final _reminderKmController = TextEditingController();
   final _reminderMonthsController = TextEditingController();
   late final String _initialOdometer;
-  late DateTime _date;
+    late DateTime _date;
+  late final String _entryId; // known before saving, so receipts can attach
+  bool _saved = false;
 
   bool _setReminder = false; // the "remind me" checkbox
   // Remembers values copied from an existing reminder, so saving them
@@ -134,10 +139,11 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
   @override
   void initState() {
     super.initState();
-    final e = widget.existing;
+       final e = widget.existing;
+    _entryId = e?.id ?? const Uuid().v4();
     _date = e?.date ?? DateTime.now();
-    _initialOdometer =
-        e == null ? '' : settings.displayDistance(e.odometer).toString();
+       final km = e?.odometer;
+    _initialOdometer = km == null ? '' : settings.displayDistance(km).toString();
     _odometerController = TextEditingController(text: _initialOdometer);
     _typeController = TextEditingController(text: e?.serviceType);
     _costController = TextEditingController(text: e?.cost.toString());
@@ -151,14 +157,20 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     _costController.dispose();
     _notesController.dispose();
     _reminderKmController.dispose();
-    _reminderMonthsController.dispose();
+       _reminderMonthsController.dispose();
+    // Leaving a new entry unsaved: don't keep receipts for it.
+    if (widget.existing == null && !_saved) {
+      AttachmentStore.removeAllFor(_entryId);
+    }
     super.dispose();
   }
 
-  // The odometer in km, ready to store. If the text wasn't changed when
-  // editing, keep the original value so unit rounding can't alter it.
-  int _odometerKm() {
+    // The odometer in km, ready to store (null if left blank). If the text
+  // wasn't changed when editing, keep the original value so unit rounding
+  // can't alter it.
+  int? _odometerKm() {
     final text = _odometerController.text.trim();
+    if (text.isEmpty) return null;
     final existing = widget.existing;
     if (existing != null && text == _initialOdometer) {
       return existing.odometer;
@@ -242,7 +254,26 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-
+    if (_odometerController.text.trim().isEmpty) {
+      final saveAnyway = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No mileage entered'),
+          content: const Text('Save this service without a mileage?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Go back'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save anyway'),
+            ),
+          ],
+        ),
+      );
+      if (saveAnyway != true || !mounted) return;
+    }
     final type = _typeController.text.trim();
 
     if (_setReminder) {
@@ -261,7 +292,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     }
 
     final entry = ServiceEntry(
-      id: widget.existing?.id, // keep the same id when editing
+            id: _entryId, // the same id the receipts are attached to
       vehicleId: widget.vehicleId,
       date: _date,
       odometer: _odometerKm(),
@@ -270,6 +301,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
       notes: _notesController.text.trim(),
     );
     if (!mounted) return;
+        _saved = true;
     Navigator.pop(context, entry); // send the entry back to the list page
   }
 
@@ -351,16 +383,15 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                     ),
                 ],
               ),
-              TextFormField(
+                           TextFormField(
                 controller: _odometerController,
                 decoration: InputDecoration(
-                  labelText: 'Odometer (${settings.distanceUnit})',
+                  labelText: 'Odometer (${settings.distanceUnit}) (optional)',
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  final error = _requiredNumber(value);
-                  if (error != null) return error;
-                  if (int.tryParse(value!.trim()) == null) {
+                  if (value == null || value.trim().isEmpty) return null;
+                  if (int.tryParse(value.trim()) == null) {
                     return 'Whole numbers only';
                   }
                   return null;
@@ -427,6 +458,9 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                 ),
               ],
               const SizedBox(height: 24),
+                            const SizedBox(height: 8),
+              AttachmentsSection(parentType: 'service', parentId: _entryId),
+              const SizedBox(height: 16),
               FilledButton(onPressed: _save, child: const Text('Save')),
             ],
           ),
