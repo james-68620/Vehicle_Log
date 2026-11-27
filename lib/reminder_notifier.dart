@@ -10,6 +10,7 @@ import 'reminders.dart';
 import 'settings.dart';
 
 const int _motSoonDays = 30; // warn this many days before the MOT runs out
+const int _taxSoonDays = 30; // warn this many days before the tax is due
 const int _repeatDays = 7; // remind again after this long if still unresolved
 
 // Works out what is due and shows Android notifications for it.
@@ -75,6 +76,7 @@ class ReminderNotifier {
       final vehicles = await AppDatabase.loadVehicles();
       for (final vehicle in vehicles) {
         await _checkMot(prefs, vehicle, today);
+        await _checkTax(prefs, vehicle, today);
         await _checkServices(prefs, vehicle);
       }
     } catch (e) {
@@ -124,8 +126,52 @@ class ReminderNotifier {
     } else {
       await prefs.remove(_prefKey(key)); // all fine again
     }
+    
   }
+  static Future<void> _checkTax(
+    SharedPreferences prefs,
+    Vehicle vehicle,
+    DateTime today,
+  ) async {
+    final key = 'tax-${vehicle.id}';
+    final tax = vehicle.taxDate;
+    if (tax == null) {
+      await prefs.remove(_prefKey(key));
+      return;
+    }
 
+    final due = DateTime.utc(tax.year, tax.month, tax.day);
+    final days = due.difference(today).inDays;
+
+    if (days < 0) {
+      await _notifyIfNeeded(
+        prefs,
+        key,
+        ReminderStatus.overdue,
+        'Tax overdue: ${vehicle.name}',
+        'The vehicle tax was due ${-days} days ago.',
+      );
+    } else if (days == 0) {
+      await _notifyIfNeeded(
+        prefs,
+        key,
+        ReminderStatus.overdue,
+        'Tax due today: ${vehicle.name}',
+        'The vehicle tax is due today.',
+      );
+    } else if (days <= _taxSoonDays) {
+      await _notifyIfNeeded(
+        prefs,
+        key,
+        ReminderStatus.soon,
+        'Tax due soon: ${vehicle.name}',
+        'The vehicle tax is due in $days days.',
+      );
+    } else {
+      await prefs.remove(_prefKey(key)); // all fine again
+    }
+  }
+  
   static Future<void> _checkServices(
     SharedPreferences prefs,
     Vehicle vehicle,

@@ -48,13 +48,18 @@ class _VehicleTabState extends State<VehicleTab> {
     );
   }
 
-  Widget _motRow(BuildContext context) {
-    final mot = widget.vehicle.motDate;
-    if (mot == null) return _row(Icons.event, 'MOT date', null);
+  // A date row with a countdown, e.g. for the MOT or the tax.
+  Widget _dueRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    DateTime? date,
+  ) {
+    if (date == null) return _row(icon, label, null);
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final due = DateTime(mot.year, mot.month, mot.day);
+    final due = DateTime(date.year, date.month, date.day);
     final days = DateTime.utc(due.year, due.month, due.day)
         .difference(DateTime.utc(today.year, today.month, today.day))
         .inDays;
@@ -73,10 +78,10 @@ class _VehicleTabState extends State<VehicleTab> {
     }
 
     return ListTile(
-      leading: const Icon(Icons.event),
+      leading: Icon(icon),
       title: Text(due.toIso8601String().split('T').first),
       subtitle: Text(
-        'MOT date  •  $status',
+        '$label  •  $status',
         style: colour == null ? null : TextStyle(color: colour),
       ),
     );
@@ -106,7 +111,8 @@ class _VehicleTabState extends State<VehicleTab> {
             'Current mileage',
             mileage == null ? null : settings.formatDistance(mileage),
           ),
-          _motRow(context),
+          _dueRow(context, Icons.event, 'MOT date', v.motDate),
+          _dueRow(context, Icons.receipt_long, 'Tax due', v.taxDate),
           RemindersSection(vehicle: v, currentMileage: mileage),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -143,6 +149,7 @@ class _VehicleFormPageState extends State<VehicleFormPage> {
   late final TextEditingController _mileageController;
   late final String _initialMileage;
   DateTime? _motDate;
+  DateTime? _taxDate;
 
   @override
   void initState() {
@@ -160,6 +167,7 @@ class _VehicleFormPageState extends State<VehicleFormPage> {
     _tankController = TextEditingController(text: v?.tankCapacity?.toString());
     _mileageController = TextEditingController(text: _initialMileage);
     _motDate = v?.motDate;
+    _taxDate = v?.taxDate;
   }
 
   @override
@@ -184,6 +192,18 @@ class _VehicleFormPageState extends State<VehicleFormPage> {
     );
     if (picked != null) {
       setState(() => _motDate = picked);
+    }
+  }
+    Future<void> _pickTaxDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _taxDate ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 5, 12, 31),
+    );
+    if (picked != null) {
+      setState(() => _taxDate = picked);
     }
   }
 
@@ -218,6 +238,7 @@ class _VehicleFormPageState extends State<VehicleFormPage> {
       tankCapacity: double.tryParse(_tankController.text.trim()),
       mileage: _mileageKm(),
       motDate: _motDate,
+      taxDate: _taxDate,
     );
     Navigator.pop(context, vehicle); // send the vehicle back
   }
@@ -325,6 +346,23 @@ class _VehicleFormPageState extends State<VehicleFormPage> {
                       ),
                 onTap: _pickMotDate,
               ),
+                          ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tax due date (optional)'),
+              subtitle: Text(
+                _taxDate == null
+                    ? 'Not set'
+                    : _taxDate!.toIso8601String().split('T').first,
+              ),
+              trailing: _taxDate == null
+                  ? const Icon(Icons.calendar_today)
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Clear date',
+                      onPressed: () => setState(() => _taxDate = null),
+                    ),
+              onTap: _pickTaxDate,
+            ),
               const SizedBox(height: 24),
               FilledButton(onPressed: _save, child: const Text('Save')),
             ],

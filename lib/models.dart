@@ -10,6 +10,7 @@ class Vehicle {
   final double? tankCapacity; // litres
   final int? mileage; // km
   final DateTime? motDate;
+  final DateTime? taxDate; // when the vehicle tax is next due
   final DateTime updatedAt;
   final bool deleted;
 
@@ -23,6 +24,7 @@ class Vehicle {
     this.tankCapacity,
     this.mileage,
     this.motDate,
+    this.taxDate,
     DateTime? updatedAt,
     this.deleted = false,
   })  : id = id ?? const Uuid().v4(),
@@ -38,6 +40,7 @@ class Vehicle {
         'tank_capacity': tankCapacity,
         'mileage': mileage,
         'mot_date': motDate?.toIso8601String(),
+        'tax_date': taxDate?.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
         'deleted': deleted ? 1 : 0,
       };
@@ -54,6 +57,9 @@ class Vehicle {
         motDate: map['mot_date'] == null
             ? null
             : DateTime.parse(map['mot_date'] as String),
+        taxDate: map['tax_date'] == null
+            ? null
+            : DateTime.parse(map['tax_date'] as String),
         updatedAt: DateTime.parse(map['updated_at'] as String),
         deleted: (map['deleted'] as int) == 1,
       );

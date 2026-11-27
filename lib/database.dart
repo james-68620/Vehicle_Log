@@ -27,7 +27,7 @@ class AppDatabase {
 
     _db = await openDatabase(
       path,
-      version: 9,
+      version: 10,
       // Runs only when the database is first created.
             onCreate: (db, version) async {
         await _createAttachmentTable(db);
@@ -42,6 +42,7 @@ class AppDatabase {
             tank_capacity REAL,
             mileage INTEGER,
             mot_date TEXT,
+            tax_date TEXT,
             updated_at TEXT NOT NULL,
             deleted INTEGER NOT NULL DEFAULT 0
           )
@@ -136,6 +137,14 @@ class AppDatabase {
           await db.execute(
             "ALTER TABLE service_entries ADD COLUMN category TEXT NOT NULL DEFAULT 'service'",
           );
+        }
+      }
+            if (oldVersion < 10) {
+        // Vehicle tax due date.
+        final columns = await db.rawQuery('PRAGMA table_info(vehicles)');
+        final hasTax = columns.any((c) => c['name'] == 'tax_date');
+        if (!hasTax) {
+          await db.execute('ALTER TABLE vehicles ADD COLUMN tax_date TEXT');
         }
       }
       },
