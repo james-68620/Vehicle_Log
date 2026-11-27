@@ -79,7 +79,10 @@ class CsvTools {
   static Future<String> exportServiceFile() async {
     final vehicles = await AppDatabase.loadVehicles();
     final lines = <String>[
-      _line(['vehicle', 'date', 'odometer_km', 'service_type', 'cost', 'notes']),
+      _line([
+        'vehicle', 'date', 'odometer_km', 'service_type', 'category',
+        'cost', 'notes',
+      ]),
     ];
     var count = 0;
     for (final vehicle in vehicles) {
@@ -90,6 +93,7 @@ class CsvTools {
           _formatDate(e.date),
           e.odometer == null ? '' : '${e.odometer}',
           e.serviceType,
+          e.category,
           e.cost.toStringAsFixed(2),
           e.notes,
         ]));
@@ -225,6 +229,7 @@ class CsvTools {
     final cType = sheet.col(['service_type', 'type']);
     final cCost = sheet.col(['cost', 'total_cost']);
     final cNotes = sheet.col(['notes']);
+    final cCategory = sheet.col(['category']);
 
     final missing = <String>[
       if (cVehicle == null) 'vehicle',
@@ -302,6 +307,7 @@ class CsvTools {
         date: date,
         odometer: odometer,
         serviceType: type,
+        category: _parseCategory(_cell(row, cCategory)),
         cost: cost,
         notes: _cell(row, cNotes),
       ));
@@ -578,4 +584,12 @@ bool? _parseYesNo(String input) {
       return false;
   }
   return null; // empty or unknown
+}
+// Unknown or empty categories count as "service".
+String _parseCategory(String input) {
+  final t = input.trim().toLowerCase();
+  if (t.startsWith('repair')) return 'repair';
+  if (t.startsWith('part')) return 'parts';
+  if (t.startsWith('other')) return 'other';
+  return 'service';
 }

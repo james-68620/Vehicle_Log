@@ -27,7 +27,7 @@ class AppDatabase {
 
     _db = await openDatabase(
       path,
-      version: 8,
+      version: 9,
       // Runs only when the database is first created.
             onCreate: (db, version) async {
         await _createAttachmentTable(db);
@@ -128,6 +128,16 @@ class AppDatabase {
         ''');
         await db.execute('DROP TABLE service_entries_old');
       }
+            if (oldVersion < 9) {
+        // Maintenance categories. Existing entries become "service".
+        final columns = await db.rawQuery('PRAGMA table_info(service_entries)');
+        final hasCategory = columns.any((c) => c['name'] == 'category');
+        if (!hasCategory) {
+          await db.execute(
+            "ALTER TABLE service_entries ADD COLUMN category TEXT NOT NULL DEFAULT 'service'",
+          );
+        }
+      }
       },
     );
     return _db!;
@@ -143,6 +153,7 @@ class AppDatabase {
         service_type TEXT NOT NULL,
         cost REAL NOT NULL,
         notes TEXT NOT NULL DEFAULT '',
+        category TEXT NOT NULL DEFAULT 'service',
         updated_at TEXT NOT NULL,
         deleted INTEGER NOT NULL DEFAULT 0
       )

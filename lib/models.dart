@@ -116,6 +116,7 @@ class ServiceEntry {
   final DateTime date;
   final int? odometer; // km, may be missing
   final String serviceType; // e.g. "Oil change"
+  final String category; // 'service', 'repair', 'parts' or 'other'
   final double cost;
   final String notes;
   final DateTime updatedAt;
@@ -127,6 +128,7 @@ class ServiceEntry {
     required this.date,
     this.odometer,
     required this.serviceType,
+    this.category = 'service',
     required this.cost,
     this.notes = '',
     DateTime? updatedAt,
@@ -140,6 +142,7 @@ class ServiceEntry {
         'date': date.toIso8601String(),
         'odometer': odometer,
         'service_type': serviceType,
+        'category': category,
         'cost': cost,
         'notes': notes,
         'updated_at': updatedAt.toIso8601String(),
@@ -152,11 +155,28 @@ class ServiceEntry {
         date: DateTime.parse(map['date'] as String),
         odometer: map['odometer'] as int?,
         serviceType: map['service_type'] as String,
+        category: (map['category'] as String?) ?? 'service',
         cost: (map['cost'] as num).toDouble(),
         notes: map['notes'] as String,
         updatedAt: DateTime.parse(map['updated_at'] as String),
         deleted: (map['deleted'] as int) == 1,
       );
+}
+
+// The kinds of maintenance work, as stored. Order = order in menus.
+const List<String> serviceCategories = ['service', 'repair', 'parts', 'other'];
+
+String categoryLabel(String category) {
+  switch (category) {
+    case 'repair':
+      return 'Repair';
+    case 'parts':
+      return 'Parts & upgrades';
+    case 'other':
+      return 'Other';
+    default:
+      return 'Service';
+  }
 }
 
 // A repeating service job, e.g. "Oil change every 10,000 km or 12 months".

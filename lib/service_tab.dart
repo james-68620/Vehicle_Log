@@ -16,7 +16,43 @@ const List<String> _commonServices = [
   'Other',
 ];
 
-// The "Service" tab: a list of maintenance work for one vehicle.
+// Tapping a quick pick also suggests a category (you can still change it).
+const Map<String, String> _suggestedCategory = {
+  'Oil change': 'service',
+  'Tyres': 'parts',
+  'Brakes': 'repair',
+  'Inspection': 'service',
+  'Battery': 'parts',
+  'Other': 'other',
+};
+
+IconData _categoryIcon(String category) {
+  switch (category) {
+    case 'repair':
+      return Icons.handyman;
+    case 'parts':
+      return Icons.settings;
+    case 'other':
+      return Icons.more_horiz;
+    default:
+      return Icons.build;
+  }
+}
+
+Color _categoryColor(String category) {
+  switch (category) {
+    case 'repair':
+      return Colors.deepOrange;
+    case 'parts':
+      return Colors.teal;
+    case 'other':
+      return Colors.blueGrey;
+    default:
+      return Colors.blue;
+  }
+}
+
+// The "Maintenance" tab: a list of work done on one vehicle.
 class ServiceTab extends StatefulWidget {
   final String vehicleId;
 
@@ -29,6 +65,7 @@ class ServiceTab extends StatefulWidget {
 class _ServiceTabState extends State<ServiceTab> {
   final List<ServiceEntry> _entries = [];
   bool _loaded = false;
+  String _filter = 'all'; // 'all' or one of serviceCategories
 
   @override
   void initState() {
@@ -66,28 +103,70 @@ class _ServiceTabState extends State<ServiceTab> {
     await _load();
   }
 
+  Widget _filterChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Wrap(
+        spacing: 8,
+        children: [
+          ChoiceChip(
+            label: const Text('All'),
+            selected: _filter == 'all',
+            onSelected: (_) => setState(() => _filter = 'all'),
+          ),
+          for (final category in serviceCategories)
+            ChoiceChip(
+              label: Text(categoryLabel(category)),
+              selected: _filter == category,
+              onSelected: (_) => setState(() => _filter = category),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildList() {
     if (!_loaded) return const SizedBox.shrink();
     if (_entries.isEmpty) {
-      return const Center(child: Text('No service history yet'));
+      return const Center(child: Text('No maintenance history yet'));
     }
-    return ListView.builder(
-      itemCount: _entries.length,
-      itemBuilder: (context, index) {
-        final entry = _entries[index];
-        final date = entry.date.toIso8601String().split('T').first;
-        return ListTile(
-          title: Text(entry.serviceType),
-           subtitle: Text(
-            '$date'
-            '${entry.odometer == null ? '' : '  •  ${settings.formatDistance(entry.odometer!)}'}'
-            '${entry.notes.isEmpty ? '' : '\n${entry.notes}'}',
-          ),
-          isThreeLine: entry.notes.isNotEmpty,
-          trailing: Text(settings.formatMoney(entry.cost)),
-          onTap: () => _openForm(existing: entry),
-        );
-      },
+
+    final shown = _filter == 'all'
+        ? _entries
+        : _entries.where((e) => e.category == _filter).toList();
+
+    return Column(
+      children: [
+        _filterChips(),
+        Expanded(
+          child: shown.isEmpty
+              ? const Center(child: Text('Nothing in this category yet'))
+              : ListView.builder(
+                  itemCount: shown.length,
+                  itemBuilder: (context, index) {
+                    final entry = shown[index];
+                    final date = entry.date.toIso8601String().split('T').first;
+                    final km = entry.odometer;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: _categoryColor(entry.category),
+                        foregroundColor: Colors.white,
+                        child: Icon(_categoryIcon(entry.category)),
+                      ),
+                      title: Text(entry.serviceType),
+                      subtitle: Text(
+                        '${categoryLabel(entry.category)}  •  $date'
+                        '${km == null ? '' : '  •  ${settings.formatDistance(km)}'}'
+                        '${entry.notes.isEmpty ? '' : '\n${entry.notes}'}',
+                      ),
+                      isThreeLine: entry.notes.isNotEmpty,
+                      trailing: Text(settings.formatMoney(entry.cost)),
+                      onTap: () => _openForm(existing: entry),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -126,7 +205,8 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
   final _reminderKmController = TextEditingController();
   final _reminderMonthsController = TextEditingController();
   late final String _initialOdometer;
-    late DateTime _date;
+  late DateTime _date;
+  late String _category;
   late final String _entryId; // known before saving, so receipts can attach
   bool _saved = false;
 
@@ -139,10 +219,11 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
   @override
   void initState() {
     super.initState();
-       final e = widget.existing;
+    final e = widget.existing;
     _entryId = e?.id ?? const Uuid().v4();
     _date = e?.date ?? DateTime.now();
-       final km = e?.odometer;
+    _category = e?.category ?? 'service';
+    final km = e?.odometer;
     _initialOdometer = km == null ? '' : settings.displayDistance(km).toString();
     _odometerController = TextEditingController(text: _initialOdometer);
     _typeController = TextEditingController(text: e?.serviceType);
@@ -157,7 +238,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     _costController.dispose();
     _notesController.dispose();
     _reminderKmController.dispose();
-       _reminderMonthsController.dispose();
+    _reminderMonthsController.dispose();
     // Leaving a new entry unsaved: don't keep receipts for it.
     if (widget.existing == null && !_saved) {
       AttachmentStore.removeAllFor(_entryId);
@@ -165,7 +246,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     super.dispose();
   }
 
-    // The odometer in km, ready to store (null if left blank). If the text
+  // The odometer in km, ready to store (null if left blank). If the text
   // wasn't changed when editing, keep the original value so unit rounding
   // can't alter it.
   int? _odometerKm() {
@@ -254,12 +335,13 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_odometerController.text.trim().isEmpty) {
       final saveAnyway = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('No mileage entered'),
-          content: const Text('Save this service without a mileage?'),
+          content: const Text('Save this entry without a mileage?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -274,6 +356,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
       );
       if (saveAnyway != true || !mounted) return;
     }
+
     final type = _typeController.text.trim();
 
     if (_setReminder) {
@@ -292,16 +375,17 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     }
 
     final entry = ServiceEntry(
-            id: _entryId, // the same id the receipts are attached to
+      id: _entryId, // the same id the receipts are attached to
       vehicleId: widget.vehicleId,
       date: _date,
       odometer: _odometerKm(),
       serviceType: type,
+      category: _category,
       cost: double.parse(_costController.text),
       notes: _notesController.text.trim(),
     );
     if (!mounted) return;
-        _saved = true;
+    _saved = true;
     Navigator.pop(context, entry); // send the entry back to the list page
   }
 
@@ -309,7 +393,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete this service entry?'),
+        title: const Text('Delete this entry?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -341,7 +425,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit service' : 'Add service'),
+        title: Text(isEditing ? 'Edit maintenance' : 'Add maintenance'),
         actions: [
           if (isEditing)
             IconButton(
@@ -364,9 +448,22 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                 trailing: const Icon(Icons.calendar_today),
                 onTap: _pickDate,
               ),
+              DropdownButtonFormField<String>(
+                value: _category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: [
+                  for (final category in serviceCategories)
+                    DropdownMenuItem(
+                      value: category,
+                      child: Text(categoryLabel(category)),
+                    ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _category = value ?? 'service'),
+              ),
               TextFormField(
                 controller: _typeController,
-                decoration: const InputDecoration(labelText: 'Service type'),
+                decoration: const InputDecoration(labelText: 'Type of work'),
                 textCapitalization: TextCapitalization.sentences,
                 validator: (value) => (value == null || value.trim().isEmpty)
                     ? 'Required'
@@ -379,11 +476,14 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                   for (final service in _commonServices)
                     ActionChip(
                       label: Text(service),
-                      onPressed: () => _typeController.text = service,
+                      onPressed: () => setState(() {
+                        _typeController.text = service;
+                        _category = _suggestedCategory[service] ?? _category;
+                      }),
                     ),
                 ],
               ),
-                           TextFormField(
+              TextFormField(
                 controller: _odometerController,
                 decoration: InputDecoration(
                   labelText: 'Odometer (${settings.distanceUnit}) (optional)',
@@ -418,7 +518,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                 title: const Text('Remind me when the next one is due'),
                 subtitle: const Text(
                   'Shown on the Details tab. Updates an existing reminder '
-                  'for the same service type.',
+                  'for the same type of work.',
                 ),
                 value: _setReminder,
                 onChanged: (value) => _onReminderToggled(value ?? false),
@@ -458,7 +558,6 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
                 ),
               ],
               const SizedBox(height: 24),
-                            const SizedBox(height: 8),
               AttachmentsSection(parentType: 'service', parentId: _entryId),
               const SizedBox(height: 16),
               FilledButton(onPressed: _save, child: const Text('Save')),

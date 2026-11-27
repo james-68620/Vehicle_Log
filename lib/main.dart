@@ -267,7 +267,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   tabs: [
                     Tab(text: 'Details'),
                     Tab(text: 'Fuel'),
-                    Tab(text: 'Service'),
+                    Tab(text: 'Maintenance'),
                     Tab(text: 'Stats'),
                   ],
                 ),
